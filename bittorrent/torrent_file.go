@@ -363,23 +363,27 @@ func (t *TorrentFile) initializeFromMagnet() {
 }
 
 // Magnet ...
-func (t *TorrentFile) Magnet() {
+func (t *TorrentFile) Magnet(firstTime bool) {
 	if t.hasResolved == false {
 		t.Resolve()
 	}
 
 	params := url.Values{}
 	params.Set("dn", t.Name)
-	if config.Get().MagnetTrackers != magnetEnricherClear {
+	log.Infof("magnet len(t.Trackers): %#v", len(t.Trackers))
+	if !(firstTime && config.Get().MagnetTrackers == magnetEnricherClear) {
 		if len(t.Trackers) != 0 {
 			for _, tracker := range t.Trackers {
 				params.Add("tr", tracker)
 			}
 		}
+	} else {
+		t.Trackers = []string{}
 	}
 
 	t.URI = fmt.Sprintf("magnet:?xt=urn:btih:%s&%s", t.InfoHash, params.Encode())
 
+	//FIXME: what's the point of this?
 	if t.IsValidMagnet() == nil {
 		params.Add("as", t.URI)
 	} else {
@@ -420,6 +424,7 @@ func (t *TorrentFile) LoadFromBytes(in []byte) error {
 		}
 	}
 
+	//log.Infof("before append t.Trackers: %s", t.Trackers)
 	if len(t.Trackers) == 0 {
 		t.Trackers = append(t.Trackers, torrentFile.Announce)
 		for _, trackers := range torrentFile.AnnounceList {
@@ -431,8 +436,22 @@ func (t *TorrentFile) LoadFromBytes(in []byte) error {
 		}
 	}
 
+	//log.Infof("t.Trackers: %s", t.Trackers)
+	/*if config.Get().MagnetTrackers == magnetEnricherClear {
+		log.Infof("Do magnetEnricherClear for %d trackers", len(t.Trackers))
+		t.Trackers = []string{}
+		torrentFile.Announce = ""
+		torrentFile.AnnounceList = [][]string{}
+	}
+
+	out, err := bencode.EncodeBytes(torrentFile)
+	if err != nil {
+		return err
+	}*/
+
 	fileName := t.GenerateFileName()
 	err := t.SaveToFile(in)
+	//err = t.SaveToFile(out)
 	if err != nil {
 		return err
 	}
@@ -460,10 +479,13 @@ func (t *TorrentFile) Download() ([]byte, error) {
 	}
 
 	// Try to get local file
-	if strings.HasSuffix(t.URI, "/") {
+	if strings.HasPrefix(t.URI, "/") { //FIXME: PREFIX???
+		log.Infof("Try to get local file: %s", t.URI)
 		_, err := os.Stat(t.URI)
 		if err == nil {
 			return ioutil.ReadFile(t.URI)
+		} else {
+			log.Errorf("Get local file failed: %s", err)
 		}
 	}
 
@@ -510,17 +532,20 @@ func (t *TorrentFile) Download() ([]byte, error) {
 // Resolve ...
 func (t *TorrentFile) Resolve() error {
 	if t.IsMagnet() {
+		log.Warning("t.IsMagnet()")
 		t.hasResolved = true
 		return nil
 	}
 
 	b, err := t.Download()
 	if err != nil {
+		log.Warningf("t.Download: %s", err)
 		return err
 	}
 
 	err = t.LoadFromBytes(b)
 	if err != nil {
+		log.Warningf("t.LoadFromBytes: %s", err)
 		return err
 	}
 
@@ -547,6 +572,7 @@ func (t *TorrentFile) GenerateFileName() string {
 func (t *TorrentFile) SaveToFile(b []byte) error {
 	// Save torrent file in temp folder
 	fileName := t.GenerateFileName()
+	log.Infof("SaveToFile: %s", fileName)
 	out, err := os.Create(fileName)
 	if err != nil {
 		return err
@@ -692,6 +718,12 @@ func (t *TorrentFile) UpdateTorrentTrackers() error {
 				torrentFile.AnnounceList = append(torrentFile.AnnounceList, []string{tracker})
 			}
 		}
+
+		/*log.Infof("t.Trackers: %s", t.Trackers)
+		if config.Get().MagnetTrackers == magnetEnricherClear {
+			log.Infof("Do magnetEnricherClear for %d trackers", len(t.Trackers))
+			t.Trackers = []string{}
+		}*/
 
 		b, err = bencode.EncodeBytes(torrentFile)
 		if err != nil {

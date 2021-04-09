@@ -96,6 +96,8 @@ const (
 	addExtraTrackersBest
 )
 
+const addExtraTrackersTier byte = 99
+
 const (
 	ipToSDefault     = iota
 	ipToSLowDelay    = 1 << iota

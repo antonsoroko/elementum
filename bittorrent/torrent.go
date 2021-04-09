@@ -1082,7 +1082,7 @@ func (t *Torrent) Name() string {
 		return t.name
 	}
 
-	if t.th == nil {
+	if t.ti.Swigcptr() == 0 {
 		return ""
 	}
 
@@ -1266,10 +1266,12 @@ func (t *Torrent) SaveMetainfo(path string) (string, error) {
 	}
 
 	path = filepath.Join(path, t.InfoHash()+".torrent")
+	log.Infof("SaveMetainfo to %s", path)
 	// If .torrent file is already created - do not modify it, to avoid breaking the sorting.
-	if _, err := os.Stat(path); err == nil {
+	// если хотим в старых торентах тоже изменять трекеры, то убрать
+	/*if _, err := os.Stat(path); err == nil {
 		return path, nil
-	}
+	}*/
 
 	out, _ := t.UpdateDatabaseMetadata(t.GetMetadata())
 	ioutil.WriteFile(path, out, 0644)
@@ -1397,9 +1399,13 @@ func (t *Torrent) ReadersReadaheadSum() int64 {
 func (t *Torrent) GetMetadata() []byte {
 	defer perf.ScopeTimer()()
 
+	log.Infof("t.ti.Trackers(): %#v", t.ti.Trackers().Size()) //.Get(0).GetUrl())
+	//t.ti.Trackers().Clear()
+	//log.Infof("t.ti.Trackers() after Clear(): %#v", t.ti.Trackers().Size())
+
 	torrentFile := lt.NewCreateTorrent(t.ti)
 	defer lt.DeleteCreateTorrent(torrentFile)
-
+	//можно тут torrentFile.AddTracker() для extraTrackers
 	torrentContent := torrentFile.Generate()
 	defer lt.DeleteEntry(torrentContent)
 
@@ -1967,6 +1973,10 @@ func (t *Torrent) ChooseFile(btp *Player) (*File, int, error) {
 		t.SaveDBFiles()
 	}
 
+	if len(files) == 0 {
+		return nil, -1, fmt.Errorf("files list is empty")
+	}
+
 	return files[biggestFile], -1, nil
 }
 
@@ -2235,6 +2245,7 @@ func (t *Torrent) GetOldTorrent() (*TorrentFile, error) {
 
 	var tm database.TorrentAssignMetadata
 	if err := database.GetStormDB().One("InfoHash", t.InfoHash(), &tm); err != nil {
+		log.Info("GetOldTorrent not found")
 		return nil, err
 	}
 
@@ -2244,6 +2255,7 @@ func (t *Torrent) GetOldTorrent() (*TorrentFile, error) {
 	} else {
 		oldTorrent.LoadFromBytes(tm.Metadata)
 	}
+	log.Info("GetOldTorrent found")
 
 	return oldTorrent, nil
 }

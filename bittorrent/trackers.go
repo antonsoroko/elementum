@@ -221,6 +221,7 @@ func UpdateDefaultTrackers() {
 
 		if config.Get().AddExtraTrackers != addExtraTrackersMinimum {
 			finalExtraTrackersURL := fmt.Sprintf(extraTrackersURLTemplate, addExtraTrackersMap[config.Get().AddExtraTrackers])
+			log.Infof("finalExtraTrackersURL: %s", finalExtraTrackersURL)
 			resp, err := proxy.GetClient().Get(finalExtraTrackersURL)
 			if err != nil || resp == nil {
 				return
@@ -231,12 +232,16 @@ func UpdateDefaultTrackers() {
 
 			bodyBytes, _ := ioutil.ReadAll(resp.Body)
 			scanner := bufio.NewScanner(bytes.NewReader(bodyBytes))
+			i := 0
 			for scanner.Scan() {
 				tracker := strings.TrimSpace(scanner.Text())
 				if !util.StringSliceContains(extraTrackers, tracker) {
 					extraTrackers = append(extraTrackers, tracker)
+					i++
 				}
 			}
+			log.Infof("added %d downloaded extraTrackers", i)
 		}
+		log.Infof("len(extraTrackers): %d", len(extraTrackers))
 	}
 }

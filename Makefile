@@ -103,7 +103,7 @@ all:
 		$(MAKE) $$i; \
 	done
 
-client: 
+client:
 	mkdir -p $(BUILD_PATH)/client
 
 $(PLATFORMS):
@@ -166,11 +166,13 @@ prepare: force
 prepare_windows:
 	$(GO) get -u github.com/StackExchange/wmi
 
+# for CI - https://www.docker.com/blog/containerize-your-go-developer-environment-part-2/
 build: force
 ifeq ($(TARGET_OS), windows)
 	GOOS=windows $(GO) get -u github.com/StackExchange/wmi
-endif	
-	$(DOCKER) run --rm -v $(GOPATH):/go -e GOPATH=/go -v $(shell pwd):/go/src/$(GO_PKG) --ulimit memlock=67108864 -w /go/src/$(GO_PKG) $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH) make dist TARGET_OS=$(TARGET_OS) TARGET_ARCH=$(TARGET_ARCH) GIT_VERSION=$(GIT_VERSION)
+endif
+	$(DOCKER) run --rm -v $(GOPATH):/go -e GOPATH=/go -v $(shell pwd):/go/src/$(GO_PKG) -v $(shell go env GOCACHE):/root/.cache/go-build --ulimit memlock=67108864 -w /go/src/$(GO_PKG) $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH) make dist TARGET_OS=$(TARGET_OS) TARGET_ARCH=$(TARGET_ARCH) GIT_VERSION=$(GIT_VERSION)
+	sudo chown -R $(shell id --user):$(shell id --group) $(shell go env GOCACHE)
 
 docker: force
 	$(DOCKER) run --rm -v $(GOPATH):/go -v -e GOPATH=/go -v $(shell pwd):/go/src/$(GO_PKG) --ulimit memlock=67108864 -w /go/src/$(GO_PKG) $(DOCKER_IMAGE):$(TARGET_OS)-$(TARGET_ARCH)
