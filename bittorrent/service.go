@@ -714,7 +714,7 @@ func (s *Service) AddTorrent(uri string, paused bool, downloadStorage int, first
 		torrentParams.SetTorrentInfo(info)
 		log.Infof("file torrentParams.GetTorrentInfo().Trackers().Size(): %#v", torrentParams.GetTorrentInfo().Trackers().Size())
 		log.Infof("file torrentParams.GetTrackers().Size(): %#v", torrentParams.GetTrackers().Size())
-		if firstTime && config.Get().MagnetTrackers == magnetEnricherClear {
+		if firstTime && config.Get().RemoveOriginalTrackers {
 			torrentParams.GetTorrentInfo().Trackers().Clear()
 			log.Infof("file after clear torrentParams.GetTorrentInfo().Trackers().Size(): %#v", torrentParams.GetTorrentInfo().Trackers().Size())
 		} else {
