@@ -208,13 +208,15 @@ func UserlistMovies(ctx *gin.Context) {
 
 	xbmcHost, _ := xbmc.GetXBMCHostWithContext(ctx)
 
-	activities, err := trakt.GetActivities("UserlistMovies")
+	//activities, err := trakt.GetActivities("UserlistMovies")
 
 	user := ctx.Params.ByName("user")
 	listID := ctx.Params.ByName("listId")
 	pageParam := ctx.DefaultQuery("page", "1")
 	page, _ := strconv.Atoi(pageParam)
-	movies, err := trakt.ListItemsMovies(user, listID, err != nil || activities.ListsUpdated())
+	isUpdateNeeded, _ := strconv.ParseBool(ctx.Params.ByName("isUpdateNeeded"))
+
+	movies, err := trakt.ListItemsMovies(user, listID, isUpdateNeeded)
 	if err != nil {
 		xbmcHost.Notify("Elementum", err.Error(), config.AddonIcon())
 	}

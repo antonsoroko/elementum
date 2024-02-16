@@ -193,7 +193,7 @@ func Routes(s *bittorrent.Service, shutdown func(code int)) *gin.Engine {
 			lists := trakt.Group("/lists")
 			{
 				lists.GET("/", MoviesTraktLists)
-				lists.GET("/:user/:listId", UserlistMovies)
+				lists.GET("/:user/:listId/:isUpdateNeeded", UserlistMovies)
 			}
 
 			calendars := trakt.Group("/calendars")

@@ -292,6 +292,14 @@ func CollectionMovies(isUpdateNeeded bool) (movies []*Movies, err error) {
 	return movies, err
 }
 
+func PreviousUserlists() (lists []*List) {
+	_ = cache.
+		NewDBStore().
+		Get(cache.TraktUserlistsKey, &lists)
+
+	return lists
+}
+
 // Userlists ...
 func Userlists() (lists []*List) {
 	defer perf.ScopeTimer()()
@@ -303,6 +311,19 @@ func Userlists() (lists []*List) {
 		}
 		return lists
 	}
+
+	//FIXME: add check for UserActivities.lists.updated_at and return cache
+	lastActivities, err := GetLastActivities()
+	previousActivities, _ := GetPreviousActivities()
+	isUpdateNeeded := err != nil || lastActivities.Lists.UpdatedAt.After(previousActivities.Lists.UpdatedAt)
+	log.Debugf("User Lists need update is %t; %v, %s, %s", isUpdateNeeded, err, lastActivities.Lists.UpdatedAt, previousActivities.Lists.UpdatedAt)
+	cacheStore := cache.NewDBStore()
+	if !isUpdateNeeded {
+		if err := cacheStore.Get(cache.TraktUserlistsKey, &lists); err == nil {
+			return lists
+		}
+	}
+
 	endPoint := fmt.Sprintf("users/%s/lists", traktUsername)
 
 	req := &reqapi.Request{
@@ -326,6 +347,16 @@ func Userlists() (lists []*List) {
 		return lists[i].Name < lists[j].Name
 	})
 
+	cacheStore.Set(cache.TraktUserlistsKey, &lists, cache.TraktUserlistsExpire)
+
+	return lists
+}
+
+func PreviousLikedlists() (lists []*List) {
+	_ = cache.
+		NewDBStore().
+		Get(cache.TraktLikedlistsKey, &lists)
+
 	return lists
 }
 
@@ -339,6 +370,18 @@ func Likedlists() (lists []*List) {
 			xbmcHost.Notify("Elementum", "LOCALIZE[30149]", config.AddonIcon())
 		}
 		return lists
+	}
+
+	//FIXME: add check for UserActivities.lists.liked_at and return cache
+	lastActivities, err := GetLastActivities()
+	previousActivities, _ := GetPreviousActivities()
+	isUpdateNeeded := err != nil || lastActivities.Lists.LikedAt.After(previousActivities.Lists.LikedAt)
+	log.Debugf("Liked Lists need update is %t; %v, %s, %s", isUpdateNeeded, err, lastActivities.Lists.LikedAt, previousActivities.Lists.LikedAt)
+	cacheStore := cache.NewDBStore()
+	if !isUpdateNeeded {
+		if err := cacheStore.Get(cache.TraktLikedlistsKey, &lists); err == nil {
+			return lists
+		}
 	}
 
 	inputLists := []*ListContainer{}
@@ -366,6 +409,8 @@ func Likedlists() (lists []*List) {
 	sort.Slice(lists, func(i int, j int) bool {
 		return lists[i].Name < lists[j].Name
 	})
+
+	cacheStore.Set(cache.TraktLikedlistsKey, &lists, cache.TraktLikedlistsExpire)
 
 	return lists
 }
@@ -415,6 +460,8 @@ func PreviousListItemsMovies(listID string) (movies []*Movies, err error) {
 func ListItemsMovies(user string, listID string, isUpdateNeeded bool) (movies []*Movies, err error) {
 	defer perf.ScopeTimer()()
 
+	log.Debugf("List %s/%s, needs update is %t", user, listID, isUpdateNeeded)
+
 	if user == "" || user == "id" {
 		user = config.Get().TraktUsername
 	}
@@ -424,7 +471,10 @@ func ListItemsMovies(user string, listID string, isUpdateNeeded bool) (movies []
 
 	if !isUpdateNeeded {
 		if err := cacheStore.Get(key, &movies); err == nil {
+			log.Debugf("Found list in cache: %s", key)
 			return movies, nil
+		} else {
+			log.Debugf("Have not found list in cache: %s", key)
 		}
 	}
 

@@ -131,6 +131,10 @@ const (
 	TraktShowTMDBExpire                    = CacheExpireLong
 	TraktShowTVDBKey                       = TraktKey + "show.tvdb.%s"
 	TraktShowTVDBExpire                    = CacheExpireLong
+	TraktLikedlistsKey                     = TraktKey + "likedlists.%s"
+	TraktLikedlistsExpire                  = CacheExpireExtra
+	TraktUserlistsKey                      = TraktKey + "userlists.%s"
+	TraktUserlistsExpire                   = CacheExpireExtra
 	TraktLockedAccountKey                  = TraktKey + "locked.account"
 	TraktLockedAccountExpire               = 24 * time.Hour
 

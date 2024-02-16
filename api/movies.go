@@ -292,11 +292,41 @@ func TopTraktLists(ctx *gin.Context) {
 	ctx.JSON(200, xbmc.NewView("menus_movies", filterListItems(items)))
 }
 
+func findListById(lists []*trakt.List, id int) *trakt.List {
+	for _, list := range lists {
+		if list.IDs.Trakt == id {
+			return list
+		}
+	}
+	return nil
+}
+
 // MoviesTraktLists ...
 func MoviesTraktLists(ctx *gin.Context) {
 	defer perf.ScopeTimer()()
 
 	items := xbmc.ListItems{}
+	// FIXME: проблема с сравнением старого (из кэша) и нового списка листов в том, что
+	// в списке листов, мы берём данные из старого кеша и новые данные из API,
+	// потом мы сравниваем даты из этих данных и мы помечаем лист как "надо обновить", т.е.
+	// мы не обновляем сам лист, а лишь генерируем ссылку с пометкой true.
+	// а потом если перезайти в список листов, то кеш (он же "старый список листов") уже новый,
+	// даты одинаковые, и соответственно пометка станет false, хотя в реальности содержимое списков мы не обновили.
+	// РЕШЕНИЕ 1: написать функцию GetList, которая будет получать минимальные данные о списке через https://trakt.docs.apiary.io/#reference/users/list/get-personal-list?console=1
+	// у функции будет параметры isUpdateNeeded и isCacheUpdateNeeded.
+	// если isUpdateNeeded=true, то функция будет брать данные из API.
+	// если isCacheUpdateNeeded=true, то функция будет брать данные из API и обновлять данные в кеш.
+	// тут мы вызывать GetList функцию будем первый раз с false+false для получения старых данных,
+	// и второй раз с true+false для получения новых данных, но без обновления кеша, чтобы можно было перезайти сюда и ничего не изменилось.
+	// дальше мы будем сравнивать их даты и сделаем флаг.
+	// и уже внутри ListItemsMovies, если она вызвана с флагом isUpdateNeeded=true (который мы ей передали через наш URL),
+	// то мы будем вызывать ещё раз GetList с true+true для обновления данных в кеше.
+	// РЕШЕНИЕ 2: внутри ListItemsMovies, если она вызвана с флагом isUpdateNeeded=true (который мы определяем тут),
+	// то мы обновляем время "локального" обновления листа.
+	// тут сверяем время обновления листа из API с нашим "локальным" временем и ставим соответствующую метку.
+	// если "локального" времени ещё нет - то тоже флаг принудительного обновления выставляем как true.
+	previousLists := trakt.PreviousUserlists()
+	previousLists = append(previousLists, trakt.PreviousLikedlists()...)
 	lists := trakt.Userlists()
 	lists = append(lists, trakt.Likedlists()...)
 
@@ -309,7 +339,17 @@ func MoviesTraktLists(ctx *gin.Context) {
 			continue
 		}
 
-		link := URLForXBMC("/movies/trakt/lists/%s/%d", list.User.Ids.Slug, list.IDs.Trakt)
+		//NEW: check UpdatedAt of list and determine if it needs to be updated
+		previousList := findListById(previousLists, list.IDs.Trakt)
+		isUpdateNeeded := previousList == nil || list.UpdatedAt.After(previousList.UpdatedAt)
+		if previousList != nil {
+			log.Debugf("List %s need update is %t; %s, %s", list.Name, isUpdateNeeded, list.UpdatedAt, previousList.UpdatedAt)
+		} else {
+			log.Debugf("List %s need update is %t; %s", list.Name, isUpdateNeeded, list.UpdatedAt)
+		}
+
+		//NEW: we add isUpdateNeeded
+		link := URLForXBMC("/movies/trakt/lists/%s/%d/%t", list.User.Ids.Slug, list.IDs.Trakt, isUpdateNeeded)
 		menuItem := []string{"LOCALIZE[30520]", fmt.Sprintf("RunPlugin(%s)", URLQuery(URLForXBMC("/menu/movie/add"), "name", list.Name, "link", link))}
 		if MovieMenu.Contains(addAction, &MenuItem{Name: list.Name, Link: link}) {
 			menuItem = []string{"LOCALIZE[30521]", fmt.Sprintf("RunPlugin(%s)", URLQuery(URLForXBMC("/menu/movie/remove"), "name", list.Name, "link", link))}
